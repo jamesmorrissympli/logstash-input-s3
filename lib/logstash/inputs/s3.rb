@@ -8,6 +8,7 @@ require "stud/interval"
 require "stud/temporary"
 require "aws-sdk"
 require "logstash/inputs/s3/patch"
+require 'zip'
 
 require 'java'
 java_import java.io.InputStream
@@ -203,7 +204,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     # Currently codecs operates on bytes instead of stream.
     # So all IO stuff: decompression, reading need to be done in the actual
     # input and send as bytes to the codecs.
-    read_file(filename) do |line|
+    read_file(filename) do |line, extra_metadata=nil|
       if stop?
         @logger.warn("Logstash S3 input, stop reading in the middle of the file, we will read it again when logstash is started")
         return false
@@ -235,6 +236,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
           end
 
           event.set("[@metadata][s3][key]", object.key)
+          event.set("[@metadata][extra]", extra_metadata) unless extra_metadata.nil?
 
           queue << event
         end
@@ -282,6 +284,8 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   def read_file(filename, &block)
     if gzip?(filename)
       read_gzip_file(filename, block)
+    elsif zip?(filename)
+      read_zip_file(filename, block)
     else
       read_plain_file(filename, block)
     end
@@ -312,10 +316,24 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     gzip_stream.close unless gzip_stream.nil?
     file_stream.close unless file_stream.nil?
   end
+  def read_zip_file(filename, block)
+    Zip::File.open(filename) do |zip_file|
+      # Handle entries one by one
+      zip_file.each do |entry|
+        entry.get_input_stream.each { |line| block.call(line, {"zip_entry_filename" => entry.name}) }
+      end
+    end
+  rescue Zip::Error => e
+    @logger.error("Zip codec: We cannot uncompress the zip file", :filename => filename)
+    raise e
+  end
 
   private
   def gzip?(filename)
     filename.end_with?('.gz','.gzip')
+  end
+  def zip?(filename)
+    filename.end_with?('.zip')
   end
   
   private

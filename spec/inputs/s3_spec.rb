@@ -428,11 +428,38 @@ describe LogStash::Inputs::S3 do
       include_examples "generated events"
     end
 
+    context 'zip compressed' do
+      let(:log) { double(:key => 'log.zip', :last_modified => Time.now - 2 * day) }
+      let(:log_file) { File.join(File.dirname(__FILE__), '..', 'fixtures', 'compressed.zip') }
+
+      include_examples "generated events" do
+        let(:events_to_process) { 4 }
+      end
+    end
+
     context 'compressed with gzip extension' do
       let(:log) { double(:key => 'log.gz', :last_modified => Time.now - 2 * day, :content_length => 5, :storage_class => 'STANDARD') }
       let(:log_file) { File.join(File.dirname(__FILE__), '..', 'fixtures', 'compressed.log.gzip') }
 
       include_examples "generated events"
+    end
+
+    context 'zip compressed' do
+      let(:log) { double(:key => 'log.zip', :last_modified => Time.now - 2 * day) }
+      let(:log_file) { File.join(File.dirname(__FILE__), '..', 'fixtures', 'compressed.zip') }
+
+      include_examples "generated events" do
+        let(:events_to_process) { 4 }
+      end
+
+      it 'should extract metadata from zip file' do
+        events = fetch_events(config)
+
+        events.each do |event|
+          expect(event.get('[@metadata][extra][zip_entry_filename]')).to match(/test[1-9]*.log/)
+        end
+      end
+
     end
 
     context 'plain text' do
