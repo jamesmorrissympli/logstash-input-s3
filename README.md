@@ -50,6 +50,9 @@ Need help? Try #logstash on freenode IRC or the https://discuss.elastic.co/c/log
 bundle install
 ```
 
+#### Sympli implementation
+- We have a need to support streaming zip files from S3 to elasticsearch. Added rubyzip dependencies and working with existing gzip handlers to stream winzip.
+
 #### Test
 
 - Update your dependencies
